@@ -1,111 +1,130 @@
-import { Connection, PublicKey, SystemProgram } from '@solana/web3.js';
+import { Connection, PublicKey, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { Program, AnchorProvider, BN, Idl } from '@coral-xyz/anchor';
-import idl from '../../my-staking/target/idl/staking_program.json'; // Your IDL file generated after building the program
-import type { StakingProgram } from '../../my-staking/target/types/staking_program'; // Adjust path as necessary
-
-const PROGRAM_ID = new PublicKey('B1NT1eXqBEnidk3kQ874u1h7VvyqBxTc9qfspgh1ef8A');
-const TREASURY_WALLET = new PublicKey('CMLp3zJRmqvv8PufYCniesemKTD3BVvqS6LRoDZMWr2U');
+import { WalletContextState } from '@solana/wallet-adapter-react';
+import { GAME_CONFIG } from '../config/constants';
 
 export class SolanaService {
   private connection: Connection;
-  private provider: AnchorProvider;
+  private wallet: WalletContextState;
   private program: Program;
 
-  constructor(connection: Connection, wallet: any) {
+  constructor(connection: Connection, wallet: WalletContextState) {
     this.connection = connection;
-    this.provider = new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
-    this.program = new Program(idl as StakingProgram as Idl,this.provider);
+    this.wallet = wallet;
+    
+    const provider = new AnchorProvider(
+      connection,
+      wallet as any,
+      { commitment: 'confirmed' }
+    );
+
+    this.program = new Program(
+      GAME_CONFIG.IDL,
+      provider
+    );
   }
 
-  async initializeGame() {
+  async stake(amount: number): Promise<void> {
+    if (!this.wallet.publicKey) throw new Error('Wallet not connected');
 
-    if (!this.program.provider.publicKey) {
-      throw new Error('Wallet public key is undefined. Ensure the wallet is connected.');
+    try {
+      const [statePda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('state')],
+        this.program.programId
+      );
+
+      const [vaultPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('vault')],
+        this.program.programId
+      );
+
+      const [playerPda] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from('player'),
+          this.wallet.publicKey.toBuffer(),
+        ],
+        this.program.programId
+      );
+
+      const lamports = new BN(amount * LAMPORTS_PER_SOL);
+
+      const tx = await this.program.methods
+        .stake(lamports)
+        .accounts({
+          authority: this.wallet.publicKey,
+          state: statePda,
+          vault: vaultPda,
+          playerAccount: playerPda,
+          systemProgram: SystemProgram.programId,
+        })
+        .transaction();
+
+      const signature = await this.wallet.sendTransaction(tx, this.connection);
+      await this.connection.confirmTransaction(signature, 'confirmed');
+    } catch (error) {
+      console.error('Stake error:', error);
+      throw error;
     }
-
-    const [statePda] = PublicKey.findProgramAddressSync(
-      [Buffer.from('state')],
-      PROGRAM_ID
-    );
-
-    const [vaultPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from('vault')],
-      PROGRAM_ID
-    );
-
-    await this.program.methods
-      .initialize(TREASURY_WALLET)
-      .accounts({
-        authority: this.program.provider.publicKey,
-        state: statePda,
-        vault: vaultPda,
-        systemProgram: SystemProgram.programId,
-      })
-      .rpc();
   }
 
-  async stake(amount: number) {
+  async getPlayerState(): Promise<any> {
+    if (!this.wallet.publicKey) throw new Error('Wallet not connected');
 
-    if (!this.program.provider.publicKey) {
-      throw new Error('Wallet public key is undefined. Ensure the wallet is connected.');
+    try {
+      const [playerPda] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from('player'),
+          this.wallet.publicKey.toBuffer(),
+        ],
+        this.program.programId
+      );
+
+      const playerAccount = await this.program.account.playerAccount.fetch(playerPda);
+      return {
+        key: playerAccount.key,
+        amount: playerAccount.amount.toNumber() / LAMPORTS_PER_SOL
+      };
+    } catch (error) {
+      if (error.message.includes('Account does not exist')) {
+        return null;
+      }
+      console.error('Get player state error:', error);
+      throw error;
     }
-
-    const [statePda] = PublicKey.findProgramAddressSync(
-      [Buffer.from('state')],
-      PROGRAM_ID
-    );
-
-    const [vaultPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from('vault')],
-      PROGRAM_ID
-    );
-
-    const [playerPda] = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from('player'),
-        this.program.provider.publicKey.toBuffer(),
-      ],
-      PROGRAM_ID
-    );
-
-    await this.program.methods
-      .stake(new BN(amount))
-      .accounts({
-        authority: this.program.provider.publicKey,
-        state: statePda,
-        vault: vaultPda,
-        playerAccount: playerPda,
-        systemProgram: SystemProgram.programId,
-      })
-      .rpc();
   }
 
-  async distributeRewards(winner: PublicKey) {
+  async closePlayerAccount(): Promise<void> {
+    if (!this.wallet.publicKey) throw new Error('Wallet not connected');
 
-    if (!this.program.provider.publicKey) {
-      throw new Error('Wallet public key is undefined. Ensure the wallet is connected.');
+    try {
+      const [statePda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('state')],
+        this.program.programId
+      );
+
+      const [playerPda] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from('player'),
+          this.wallet.publicKey.toBuffer(),
+        ],
+        this.program.programId
+      );
+
+      const tx = await this.program.methods
+        .closePlayerAccount()
+        .accounts({
+          authority: this.wallet.publicKey,
+          state: statePda,
+          playerAccount: playerPda,
+          systemProgram: SystemProgram.programId,
+        })
+        .transaction();
+
+      const signature = await this.wallet.sendTransaction(tx, this.connection);
+      await this.connection.confirmTransaction(signature, 'confirmed');
+    } catch (error) {
+      console.error('Close player account error:', error);
+      throw error;
     }
-
-    const [statePda] = PublicKey.findProgramAddressSync(
-      [Buffer.from('state')],
-      PROGRAM_ID
-    );
-
-    const [vaultPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from('vault')],
-      PROGRAM_ID
-    );
-
-    await this.program.methods
-      .reward()
-      .accounts({
-        authority: this.program.provider.publicKey,
-        state: statePda,
-        vault: vaultPda,
-        treasury: TREASURY_WALLET,
-        winner,
-        systemProgram: SystemProgram.programId,
-      })
-      .rpc();
   }
 }

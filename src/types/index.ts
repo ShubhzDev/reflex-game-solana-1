@@ -23,3 +23,5 @@ export interface GameState {
   winners: Winner[];
   prizePool: number;
 }
+
+export type { GamePhase } from '../config/constants';

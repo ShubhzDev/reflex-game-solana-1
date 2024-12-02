@@ -59,7 +59,7 @@ const initializeServer = async () => {
           } catch (error) {
             console.error('Error in game loop:', error);
           }
-        }, 30000);
+        }, 3000);
       } catch (error) {
         console.error('Error starting game loop:', error);
       }
