@@ -1,12 +1,14 @@
-import { Connection, PublicKey, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { Connection, PublicKey, SystemProgram, LAMPORTS_PER_SOL, Transaction } from '@solana/web3.js';
 import { Program, AnchorProvider, BN, Idl } from '@coral-xyz/anchor';
 import { WalletContextState } from '@solana/wallet-adapter-react';
 import { GAME_CONFIG } from '../config/constants';
+import { ProgramError, StakingProgram } from '../types/program';
+import { toast } from 'react-hot-toast';
 
 export class SolanaService {
   private connection: Connection;
   private wallet: WalletContextState;
-  private program: Program;
+  private program: StakingProgram;
 
   constructor(connection: Connection, wallet: WalletContextState) {
     this.connection = connection;
@@ -15,13 +17,13 @@ export class SolanaService {
     const provider = new AnchorProvider(
       connection,
       wallet as any,
-      { commitment: 'confirmed' }
+      { commitment: 'processed' }
     );
 
     this.program = new Program(
       GAME_CONFIG.IDL,
       provider
-    );
+    ) as StakingProgram;
   }
 
   async stake(amount: number): Promise<void> {
@@ -59,72 +61,50 @@ export class SolanaService {
         })
         .transaction();
 
-      const signature = await this.wallet.sendTransaction(tx, this.connection);
-      await this.connection.confirmTransaction(signature, 'confirmed');
+      const latestBlockhash = await this.connection.getLatestBlockhash();
+      tx.recentBlockhash = latestBlockhash.blockhash;
+      tx.feePayer = this.wallet.publicKey;
+
+      const signedTx = await this.wallet.signTransaction?.(tx);
+      if (!signedTx) throw new Error('Failed to sign transaction');
+
+      const signature = await this.connection.sendRawTransaction(signedTx.serialize());
+      
+      const confirmation = await this.connection.confirmTransaction({
+        signature,
+        blockhash: latestBlockhash.blockhash,
+        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
+      }, 'confirmed');
+
+      if (confirmation.value.err) {
+        throw new Error('Transaction failed');
+      }
+
     } catch (error) {
       console.error('Stake error:', error);
-      throw error;
+      throw this.handleError(error);
     }
   }
 
-  async getPlayerState(): Promise<any> {
-    if (!this.wallet.publicKey) throw new Error('Wallet not connected');
-
-    try {
-      const [playerPda] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from('player'),
-          this.wallet.publicKey.toBuffer(),
-        ],
-        this.program.programId
-      );
-
-      const playerAccount = await this.program.account.playerAccount.fetch(playerPda);
-      return {
-        key: playerAccount.key,
-        amount: playerAccount.amount.toNumber() / LAMPORTS_PER_SOL
-      };
-    } catch (error) {
-      if (error.message.includes('Account does not exist')) {
-        return null;
-      }
-      console.error('Get player state error:', error);
-      throw error;
+  private handleError(error: unknown): Error {
+    console.error('Detailed error:', error);
+    const programError = error as ProgramError;
+    
+    if (programError.msg) {
+      return new Error(programError.msg);
     }
-  }
-
-  async closePlayerAccount(): Promise<void> {
-    if (!this.wallet.publicKey) throw new Error('Wallet not connected');
-
-    try {
-      const [statePda] = PublicKey.findProgramAddressSync(
-        [Buffer.from('state')],
-        this.program.programId
-      );
-
-      const [playerPda] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from('player'),
-          this.wallet.publicKey.toBuffer(),
-        ],
-        this.program.programId
-      );
-
-      const tx = await this.program.methods
-        .closePlayerAccount()
-        .accounts({
-          authority: this.wallet.publicKey,
-          state: statePda,
-          playerAccount: playerPda,
-          systemProgram: SystemProgram.programId,
-        })
-        .transaction();
-
-      const signature = await this.wallet.sendTransaction(tx, this.connection);
-      await this.connection.confirmTransaction(signature, 'confirmed');
-    } catch (error) {
-      console.error('Close player account error:', error);
-      throw error;
+    
+    // Handle specific error codes
+    if (programError.code === 6000) {
+      return new Error('Program is already initialized');
     }
+    if (programError.code === 6001) {
+      return new Error('Unauthorized action');
+    }
+    if (programError.code === 6003) {
+      return new Error('Insufficient stake amount');
+    }
+    
+    return new Error('Transaction failed. Please try again.');
   }
 }

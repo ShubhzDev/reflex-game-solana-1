@@ -1,5 +1,6 @@
 import mongoose, { Schema } from 'mongoose';
 import { IGame } from '../types';
+import { GAME_PHASES } from '../config/gameConfig';
 
 const gameSchema = new Schema<IGame>({
   targetPosition: {
@@ -18,6 +19,15 @@ const gameSchema = new Schema<IGame>({
     type: Number,
     default: 1,
   },
+  currentPhase: {
+    type: String,
+    enum: Object.values(GAME_PHASES),
+    default: GAME_PHASES.STAKING,
+  },
+  phaseStartTime: {
+    type: Date,
+    default: Date.now,
+  }
 });
 
 export default mongoose.model<IGame>('Game', gameSchema);

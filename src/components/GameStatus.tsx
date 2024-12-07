@@ -1,5 +1,6 @@
 import React from 'react';
 import { GamePhase, GAME_PHASES } from '../config/constants';
+import { formatTime } from '../utils/time';
 
 interface GameStatusProps {
   currentPhase: GamePhase;
@@ -26,7 +27,7 @@ export const GameStatus: React.FC<GameStatusProps> = ({ currentPhase, timeLeft, 
       <div className="flex justify-between items-center mb-2">
         <h3 className="text-neon-pink font-bold text-lg">{getPhaseDisplay()}</h3>
         <span className="text-neon-green font-mono">
-          {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
+          {formatTime(timeLeft)}
         </span>
       </div>
       <p className="text-neon-blue text-sm">{message}</p>

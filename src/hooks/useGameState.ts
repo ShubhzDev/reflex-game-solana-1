@@ -1,10 +1,8 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
-import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { toast } from 'react-hot-toast';
 import { GameState, GamePhase } from '../types';
 import { GAME_CONFIG, GAME_PHASES } from '../config/constants';
-import { SolanaService } from '../services/solanaService';
 import { useSocket } from './useSocket';
 
 const initialGameState: GameState = {
@@ -13,7 +11,10 @@ const initialGameState: GameState = {
   isActive: false,
   currentRoundEndTime: Date.now(),
   winners: [],
-  prizePool: 0
+  prizePool: 0,
+  serverTime: Date.now(),
+  currentPhase: GAME_PHASES.STAKING,
+  phaseEndTime: Date.now()
 };
 
 export const useGameState = () => {
@@ -21,30 +22,53 @@ export const useGameState = () => {
   const wallet = useWallet();
   const socket = useSocket();
   const [gameState, setGameState] = useState<GameState>(initialGameState);
-  const [solanaService, setSolanaService] = useState<SolanaService | null>(null);
   const [currentPhase, setCurrentPhase] = useState<GamePhase>(GAME_PHASES.STAKING);
-  const [phaseTimeLeft, setPhaseTimeLeft] = useState<number>(GAME_CONFIG.PHASES.STAKING);
-  const [statusMessage, setStatusMessage] = useState<string>('Staking phase in progress...');
-
-  useEffect(() => {
-    if (connection && wallet) {
-      setSolanaService(new SolanaService(connection, wallet));
-    }
-  }, [connection, wallet]);
+  const [phaseTimeLeft, setPhaseTimeLeft] = useState<number>(0);
+  const [serverTimeOffset, setServerTimeOffset] = useState<number>(0);
 
   useEffect(() => {
     if (socket) {
       socket.on('gameState', (newState: GameState) => {
         setGameState(newState);
+        setCurrentPhase(newState.currentPhase);
+        
+        // Calculate server time offset
+        const clientTime = Date.now();
+        const offset = newState.serverTime - clientTime;
+        setServerTimeOffset(offset);
       });
 
-      socket.on('phaseChange', ({ phase, timeLeft, message }) => {
-        setCurrentPhase(phase);
-        setPhaseTimeLeft(timeLeft);
-        setStatusMessage(message);
+      socket.on('error', (error: { message: string }) => {
+        toast.error(error.message);
       });
+
+      // Request initial state
+      socket.emit('requestGameState');
     }
+
+    return () => {
+      if (socket) {
+        socket.off('gameState');
+        socket.off('error');
+      }
+    };
   }, [socket]);
+
+  // Update time left based on server time
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const currentServerTime = Date.now() + serverTimeOffset;
+      const timeLeft = Math.max(0, Math.ceil((gameState.phaseEndTime - currentServerTime) / 1000));
+      setPhaseTimeLeft(timeLeft);
+
+      // Auto-request new state when phase ends
+      if (timeLeft === 0) {
+        socket?.emit('requestGameState');
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [gameState.phaseEndTime, serverTimeOffset, socket]);
 
   const isStaked = useCallback((): boolean => {
     if (!wallet.publicKey) return false;
@@ -52,19 +76,34 @@ export const useGameState = () => {
   }, [wallet.publicKey, gameState.players]);
 
   const handleTargetClick = useCallback(() => {
-    if (!wallet.publicKey || !isStaked() || currentPhase !== GAME_PHASES.GAMEPLAY) return;
+    if (!wallet.publicKey || !isStaked() || currentPhase !== GAME_PHASES.GAMEPLAY) {
+      return;
+    }
     
     socket?.emit('targetClick', {
       wallet: wallet.publicKey.toBase58(),
-      timestamp: Date.now()
+      timestamp: Date.now() + serverTimeOffset
     });
-  }, [wallet.publicKey, isStaked, currentPhase, socket]);
+  }, [wallet.publicKey, isStaked, currentPhase, serverTimeOffset, socket]);
 
   const connectToGame = useCallback(() => {
     if (!socket?.connected) {
       socket?.connect();
     }
   }, [socket]);
+
+  const getStatusMessage = useCallback(() => {
+    switch (currentPhase) {
+      case GAME_PHASES.STAKING:
+        return 'Staking phase - Get ready for the next round!';
+      case GAME_PHASES.GAMEPLAY:
+        return 'Game in progress - Click the targets as fast as you can!';
+      case GAME_PHASES.WINNER_DECLARATION:
+        return 'Calculating winners...';
+      default:
+        return '';
+    }
+  }, [currentPhase]);
 
   return {
     gameState,
@@ -73,6 +112,6 @@ export const useGameState = () => {
     connectToGame,
     currentPhase,
     phaseTimeLeft,
-    statusMessage
+    statusMessage: getStatusMessage()
   };
 };

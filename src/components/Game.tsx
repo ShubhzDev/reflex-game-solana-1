@@ -9,7 +9,6 @@ import { GameArea } from './GameArea';
 import { Twitter } from 'lucide-react';
 import { useGameState } from '../hooks/useGameState';
 import { useSolanaGame } from '../hooks/useSolanaGame';
-import { GAME_CONFIG } from '../config/constants';
 
 const Game: React.FC = () => {
   const { publicKey } = useWallet();
@@ -33,41 +32,50 @@ const Game: React.FC = () => {
   }, [connectToGame]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-black to-indigo-900 text-white">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 text-white p-4">
       <LegalDisclaimer />
       
-      <div className="max-w-7xl mx-auto p-4">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-neon-pink to-neon-blue">
+      <div className="max-w-[1800px] mx-auto">
+        <div className="flex justify-between items-center mb-6 bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/20">
+          <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-pink-400">
             Solana Reflex Battle
           </h1>
-          <WalletMultiButton />
+          <div className="flex items-center gap-4">
+            {!isStaked && publicKey && (
+              <button
+                onClick={() => handleStake()}
+                disabled={isLoading}
+                className="px-6 py-3 bg-gradient-to-r from-cyan-400 to-pink-400 rounded-lg font-bold text-white hover:opacity-90 transition-all duration-300 shadow-xl disabled:opacity-50"
+              >
+                Stake 0.1 SOL to Play
+              </button>
+            )}
+            <WalletMultiButton />
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <div className="lg:col-span-3">
-            <GameStatus 
-              currentPhase={currentPhase}
-              timeLeft={phaseTimeLeft}
-              message={statusMessage}
-            />
-
-            <GameArea
-              currentPhase={currentPhase}
-              targetPosition={gameState.targetPosition}
-              isStaked={isStaked}
-              onTargetClick={handleTargetClick}
-              onStake={handleStake}
-            />
-          </div>
-
-          <div className="lg:col-span-1">
+        <div className="flex gap-6">
+          <div className="w-[300px] space-y-4">
             <GameStats 
               playerCount={gameState.players.length}
               timeLeft={phaseTimeLeft}
               prizePool={gameState.prizePool}
             />
             <StakedPlayers players={gameState.players} />
+          </div>
+
+          <div className="flex-1">
+            <GameStatus 
+              currentPhase={currentPhase}
+              timeLeft={phaseTimeLeft}
+              message={statusMessage}
+            />
+            <GameArea
+              currentPhase={currentPhase}
+              targetPosition={gameState.targetPosition}
+              isStaked={isStaked}
+              onTargetClick={handleTargetClick}
+            />
           </div>
         </div>
 
@@ -76,7 +84,7 @@ const Game: React.FC = () => {
             href="https://twitter.com/intent/tweet?text=I'm playing Solana Reflex Battle!"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2 px-6 py-3 bg-[#1DA1F2]/20 border border-[#1DA1F2] rounded-lg hover:bg-[#1DA1F2]/30 transition-all duration-300 glow-sm"
+            className="flex items-center gap-2 px-6 py-3 bg-[#1DA1F2] rounded-lg hover:bg-[#1A8CD8] transition-all duration-300 shadow-xl"
           >
             <Twitter className="w-5 h-5" />
             Share on Twitter

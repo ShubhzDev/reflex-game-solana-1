@@ -3,9 +3,13 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { errorHandler } from './middleware/errorHandler';
 import connectDB from './config/db';
 import { createNewRound, handlePlayerClick, getGameState } from './services/gameService';
 import { stakeSOL } from './services/playerService';
+import { SERVER_CONFIG } from './config/constants';
+import { isValidSolanaAddress, isValidStakeAmount } from './utils/validation';
+import { GameError } from './utils/errors';
 
 dotenv.config();
 
@@ -76,6 +80,10 @@ const initializeServer = async () => {
 
         socket.on('targetClick', async (data: TargetClickData) => {
           try {
+            if (!isValidSolanaAddress(data.wallet)) {
+              throw new GameError('Invalid wallet address');
+            }
+
             const updatedPlayer = await handlePlayerClick(data.wallet, data.timestamp);
             if (updatedPlayer) {
               const newGameState = await getGameState();
@@ -91,6 +99,14 @@ const initializeServer = async () => {
 
         socket.on('stake', async (data: StakeData) => {
           try {
+            if (!isValidSolanaAddress(data.wallet)) {
+              throw new GameError('Invalid wallet address');
+            }
+
+            if (!isValidStakeAmount(data.amount)) {
+              throw new GameError('Invalid stake amount');
+            }
+
             const player = await stakeSOL(data.wallet, data.amount);
             if (player) {
               socket.emit('playerStaked', data.wallet);
@@ -109,9 +125,10 @@ const initializeServer = async () => {
       }
     });
 
-    const PORT = process.env.PORT || 3000;
-    httpServer.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
+    app.use(errorHandler);
+
+    httpServer.listen(SERVER_CONFIG.PORT, () => {
+      console.log(`Server running on port ${SERVER_CONFIG.PORT}`);
     });
   } catch (error) {
     console.error('Failed to initialize server:', error);

@@ -1,6 +1,12 @@
 import { Idl } from '@coral-xyz/anchor';
 import gameIdl from '../idl/game.json';
 
+export const GAME_PHASES = {
+  STAKING: 'STAKING',
+  GAMEPLAY: 'GAMEPLAY',
+  WINNER_DECLARATION: 'WINNER_DECLARATION'
+} as const;
+
 export const GAME_CONFIG = {
   BACKEND_URL: 'http://localhost:3000',
   PHASES: {
@@ -25,11 +31,3 @@ export const LEGAL_DISCLAIMER = `
   Game outcomes depend on player skill and timing.
   No real-money gambling is involved.
 `;
-
-export const GAME_PHASES = {
-  STAKING: 'STAKING',
-  GAMEPLAY: 'GAMEPLAY',
-  WINNER_DECLARATION: 'WINNER_DECLARATION'
-} as const;
-
-export type GamePhase = typeof GAME_PHASES[keyof typeof GAME_PHASES];
