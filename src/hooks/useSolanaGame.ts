@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast';
 import { SolanaService } from '../services/solanaService';
 import { GAME_CONFIG } from '../config/constants';
 import { useSocket } from './useSocket';
+import { SolanaTransactionError, SolanaConnectionError, SolanaConfigError } from '../services/errors/SolanaErrors';
 
 export const useSolanaGame = () => {
   const { connection } = useConnection();
@@ -25,12 +26,11 @@ export const useSolanaGame = () => {
     }
 
     setIsLoading(true);
+    const toastId = toast.loading('Processing stake transaction...');
+
     try {
-      const toastId = toast.loading('Processing stake transaction...');
-      console.log("GAME_CONFIG.STAKE_AMOUNT ",GAME_CONFIG.STAKE_AMOUNT);
       const signature = await solanaService.stake(GAME_CONFIG.STAKE_AMOUNT);
       
-      // Notify backend about the stake
       socket?.emit('stake', {
         wallet: wallet.publicKey.toBase58(),
         amount: GAME_CONFIG.STAKE_AMOUNT,
@@ -40,7 +40,17 @@ export const useSolanaGame = () => {
       toast.success('Successfully staked SOL!', { id: toastId });
     } catch (error) {
       console.error('Error staking:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to stake SOL');
+      
+      let errorMessage = 'Failed to stake SOL';
+      if (error instanceof SolanaTransactionError) {
+        errorMessage = error.message;
+      } else if (error instanceof SolanaConnectionError) {
+        errorMessage = 'Connection error. Please try again.';
+      } else if (error instanceof SolanaConfigError) {
+        errorMessage = 'Invalid configuration. Please check your wallet.';
+      }
+
+      toast.error(errorMessage, { id: toastId });
     } finally {
       setIsLoading(false);
     }

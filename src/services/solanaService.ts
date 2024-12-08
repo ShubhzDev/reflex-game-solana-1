@@ -1,9 +1,9 @@
-import { Connection, PublicKey, SystemProgram, LAMPORTS_PER_SOL, Transaction } from '@solana/web3.js';
+import { Connection, PublicKey, Transaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { Program, AnchorProvider, Idl } from '@coral-xyz/anchor';
 import { WalletContextState } from '@solana/wallet-adapter-react';
 import { GAME_CONFIG } from '../config/constants';
-import { ProgramError } from '../types/program';
-import { toast } from 'react-hot-toast';
+import { StakeTransaction } from './transactions/StakeTransaction';
+import { SolanaTransactionError, SolanaConnectionError, SolanaConfigError } from './errors/SolanaErrors';
 import * as anchor from "@coral-xyz/anchor";
 const { BN } = anchor;
 
@@ -11,8 +11,12 @@ export class SolanaService {
   private connection: Connection;
   private wallet: WalletContextState;
   private program: Program;
+  private stakeTransaction: StakeTransaction;
 
   constructor(connection: Connection, wallet: WalletContextState) {
+    if (!connection) throw new SolanaConfigError('Connection is required');
+    if (!wallet) throw new SolanaConfigError('Wallet is required');
+
     this.connection = connection;
     this.wallet = wallet;
     
@@ -26,50 +30,55 @@ export class SolanaService {
       GAME_CONFIG.IDL,
       provider
     );
+
+    this.stakeTransaction = new StakeTransaction(this.program);
   }
 
   async stake(amount: number): Promise<string> {
-    if (!this.wallet.publicKey) throw new Error('Wallet not connected');
+    if (!this.wallet.publicKey) {
+      throw new SolanaConfigError('Wallet not connected');
+    }
 
     try {
-      const [statePda] = PublicKey.findProgramAddressSync(
-        [Buffer.from('state')],
-        this.program.programId
-      );
-
-      const [vaultPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from('vault')],
-        this.program.programId
-      );
-
-      const [playerPda] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from('player'),
-          this.wallet.publicKey.toBuffer(),
-        ],
-        this.program.programId
-      );
-
       const lamports = new BN(amount * LAMPORTS_PER_SOL);
+      
+      // Build the transaction
+      const tx = await this.stakeTransaction.build(
+        this.wallet.publicKey,
+        lamports
+      );
 
-      const tx = await this.program.methods
-        .stake(lamports)
-        .accounts({
-          authority: this.wallet.publicKey,
-          state: statePda,
-          vault: vaultPda,
-          playerAccount: playerPda,
-          systemProgram: SystemProgram.programId,
-        })
-        .transaction();
-
+      // Get latest blockhash
       const latestBlockhash = await this.connection.getLatestBlockhash();
       tx.recentBlockhash = latestBlockhash.blockhash;
       tx.feePayer = this.wallet.publicKey;
 
-      const signedTx = await this.wallet.signTransaction?.(tx);
-      if (!signedTx) throw new Error('Failed to sign transaction');
+      // Sign transaction
+      const signedTx = await this.signTransaction(tx);
 
+      // Send and confirm transaction
+      const signature = await this.sendAndConfirmTransaction(signedTx, latestBlockhash);
+
+      return signature;
+    } catch (error) {
+      console.error('Stake error:', error);
+      throw this.handleTransactionError(error);
+    }
+  }
+
+  private async signTransaction(transaction: Transaction): Promise<Transaction> {
+    const signedTx = await this.wallet.signTransaction?.(transaction);
+    if (!signedTx) {
+      throw new SolanaConnectionError('Failed to sign transaction');
+    }
+    return signedTx;
+  }
+
+  private async sendAndConfirmTransaction(
+    signedTx: Transaction,
+    latestBlockhash: { blockhash: string; lastValidBlockHeight: number }
+  ): Promise<string> {
+    try {
       const signature = await this.connection.sendRawTransaction(signedTx.serialize());
       
       await this.connection.confirmTransaction({
@@ -80,28 +89,24 @@ export class SolanaService {
 
       return signature;
     } catch (error) {
-      console.error('Stake error:', error);
-      throw this.handleError(error);
+      throw new SolanaConnectionError('Failed to send or confirm transaction');
     }
   }
 
-  private handleError(error: unknown): Error {
-    console.error('Detailed error:', error);
-    const programError = error as ProgramError;
-    
-    if (programError.msg) {
-      return new Error(programError.msg);
+  private handleTransactionError(error: unknown): Error {
+    console.error('Transaction error details:', error);
+
+    if (error instanceof SolanaTransactionError || 
+        error instanceof SolanaConnectionError || 
+        error instanceof SolanaConfigError) {
+      return error;
     }
-    
-    switch (programError.code) {
-      case 6000:
-        return new Error('Program is already initialized');
-      case 6001:
-        return new Error('Unauthorized action');
-      case 6003:
-        return new Error('Insufficient stake amount');
-      default:
-        return new Error('Transaction failed. Please try again.');
+
+    // Handle SendTransactionError specifically
+    if ((error as any).logs) {
+      return SolanaTransactionError.fromSendTransactionError(error as any);
     }
+
+    return new SolanaTransactionError('Transaction failed. Please try again.');
   }
 }
