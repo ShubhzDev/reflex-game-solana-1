@@ -9,6 +9,7 @@ import { GameArea } from './GameArea';
 import { Twitter } from 'lucide-react';
 import { useGameState } from '../hooks/useGameState';
 import { useSolanaGame } from '../hooks/useSolanaGame';
+import { toast } from 'react-hot-toast';
 
 const Game: React.FC = () => {
   const { publicKey } = useWallet();
@@ -31,6 +32,14 @@ const Game: React.FC = () => {
     connectToGame();
   }, [connectToGame]);
 
+  const onStakeClick = async () => {
+    try {
+      await handleStake();
+    } catch (error) {
+      toast.error('Failed to stake. Please try again.');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 text-white p-4">
       <LegalDisclaimer />
@@ -43,11 +52,11 @@ const Game: React.FC = () => {
           <div className="flex items-center gap-4">
             {!isStaked && publicKey && (
               <button
-                onClick={() => handleStake()}
+                onClick={onStakeClick}
                 disabled={isLoading}
                 className="px-6 py-3 bg-gradient-to-r from-cyan-400 to-pink-400 rounded-lg font-bold text-white hover:opacity-90 transition-all duration-300 shadow-xl disabled:opacity-50"
               >
-                Stake 0.1 SOL to Play
+                {isLoading ? 'Staking...' : 'Stake 0.1 SOL to Play'}
               </button>
             )}
             <WalletMultiButton />

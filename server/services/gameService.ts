@@ -1,6 +1,6 @@
+import { Position, GamePhase } from '../types';
 import Game from '../models/Game';
 import Player from '../models/Player';
-import { Position, Winner, GamePhase, IPlayerData } from '../types';
 import { GAME_PHASES } from '../config/gameConfig';
 import { calculateRewardDistribution } from '../utils/gameUtils';
 
@@ -8,32 +8,6 @@ const PHASE_DURATIONS = {
   [GAME_PHASES.STAKING]: 30000,    // 30 seconds
   [GAME_PHASES.GAMEPLAY]: 30000,    // 30 seconds
   [GAME_PHASES.WINNER_DECLARATION]: 10000, // 10 seconds
-};
-
-const REWARD_PERCENTAGE = 0.9; // 90% of the pool goes to winners
-
-export const calculateRewards = async (currentRound: number): Promise<Winner[]> => {
-  try {
-    const players = await Player.find({ 
-      score: { $gt: 0 }
-    }).sort({ score: -1 });
-
-    if (players.length === 0) return [];
-
-    const totalStaked = players.reduce((sum, p) => sum + p.stakedAmount, 0);
-    const prizePool = totalStaked * REWARD_PERCENTAGE;
-    
-    const rewards = calculateRewardDistribution(prizePool, players.length);
-    
-    return players.slice(0, rewards.length).map((player, index) => ({
-      wallet: player.wallet,
-      amount: rewards[index],
-      round: currentRound,
-    }));
-  } catch (error) {
-    console.error('Error calculating rewards:', error);
-    return [];
-  }
 };
 
 export const getCurrentPhase = async (): Promise<{ phase: GamePhase; endTime: number }> => {
@@ -80,7 +54,7 @@ const getNextPhase = (currentPhase: GamePhase): GamePhase => {
   }
 };
 
-export const handlePlayerClick = async (wallet: string, timestamp: number): Promise<IPlayerData | null> => {
+export const handlePlayerClick = async (wallet: string, timestamp: number) => {
   try {
     const { phase } = await getCurrentPhase();
     if (phase !== GAME_PHASES.GAMEPLAY) return null;
@@ -128,7 +102,7 @@ export const getGameState = async () => {
       isActive: true,
       currentRoundEndTime: game.roundEndTime.getTime(),
       winners: [],
-      prizePool: totalStaked * REWARD_PERCENTAGE,
+      prizePool: totalStaked * 0.9, // 90% of total stakes
       serverTime: Date.now(),
       currentPhase: phase,
       phaseEndTime: endTime

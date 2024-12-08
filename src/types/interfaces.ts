@@ -1,7 +1,6 @@
-import { Document } from 'mongoose';
-import { GAME_PHASES } from '../config/gameConfig';
+import { GAME_PHASES } from '../../server/config/constants';
 
-export interface IGame extends Document {
+export interface IGame {
   targetPosition: {
     x: number;
     y: number;
@@ -13,7 +12,7 @@ export interface IGame extends Document {
   phaseStartTime: Date;
 }
 
-export interface IPlayer extends Document {
+export interface IPlayer {
   wallet: string;
   stakedAmount: number;
   score: number;
@@ -26,16 +25,3 @@ export interface IPlayerData {
   score: number;
   lastActive: Date;
 }
-
-export interface Position {
-  x: number;
-  y: number;
-}
-
-export interface Winner {
-  wallet: string;
-  amount: number;
-  round: number;
-}
-
-export type GamePhase = keyof typeof GAME_PHASES;

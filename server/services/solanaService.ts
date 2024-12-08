@@ -1,8 +1,9 @@
 import { Connection, Keypair, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { Program, AnchorProvider, Wallet, BN } from '@coral-xyz/anchor';
+import { Program, AnchorProvider, Wallet } from '@coral-xyz/anchor';
 import { GAME_CONFIG } from '../config/constants';
 import * as anchor from '@coral-xyz/anchor';
 import dotenv from 'dotenv';
+const { BN } = anchor
 
 dotenv.config();
 
@@ -29,7 +30,6 @@ export class SolanaService {
     
     this.program = new Program(
       GAME_CONFIG.IDL,
-      new PublicKey(GAME_CONFIG.PROGRAM_ID),
       this.provider
     );
   }

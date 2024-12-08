@@ -1,8 +1,15 @@
 import Player from '../models/Player';
-import { IPlayer, IPlayerData } from '../types';
+import { IPlayerData } from '../types';
+import { solanaService } from './solanaService';
 
 export const stakeSOL = async (wallet: string, amount: number): Promise<IPlayerData | null> => {
   try {
+    // Verify the stake on-chain
+    const isVerified = await solanaService.verifyStake(wallet, amount);
+    if (!isVerified) {
+      throw new Error('Stake verification failed');
+    }
+
     const player = await Player.findOneAndUpdate(
       { wallet },
       { 
@@ -22,7 +29,7 @@ export const stakeSOL = async (wallet: string, amount: number): Promise<IPlayerD
     };
   } catch (error) {
     console.error('Error staking SOL:', error);
-    return null;
+    throw error;
   }
 };
 

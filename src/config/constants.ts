@@ -10,13 +10,11 @@ export const GAME_PHASES = {
 export const GAME_CONFIG = {
   BACKEND_URL: 'http://localhost:3000',
   PHASES: {
-    STAKING: 4 * 60 * 1000,    // 4 minutes
-    GAMEPLAY: 4 * 60 * 1000,   // 4 minutes
-    WINNER: 2 * 60 * 1000      // 2 minutes
+    STAKING: 30000,      // 30 seconds
+    GAMEPLAY: 30000,     // 30 seconds
+    WINNER: 10000        // 10 seconds
   },
-  ROUND_DURATION: 10 * 60 * 1000, // 10 minutes
-  TARGET_UPDATE_INTERVAL: 500,     // 500ms for faster target movement
-  STAKE_AMOUNT: 0.1,
+  STAKE_AMOUNT: 0.01,
   PROGRAM_ID: 'B1NT1eXqBEnidk3kQ874u1h7VvyqBxTc9qfspgh1ef8A',
   IDL: gameIdl as Idl,
   REWARD_PERCENTAGE: 0.9,
@@ -31,3 +29,9 @@ export const LEGAL_DISCLAIMER = `
   Game outcomes depend on player skill and timing.
   No real-money gambling is involved.
 `;
+
+export const UI_CONSTANTS = {
+  TARGET_SIZE: 20,
+  TARGET_ANIMATION_DURATION: 500,
+  SCOREBOARD_UPDATE_INTERVAL: 1000,
+};

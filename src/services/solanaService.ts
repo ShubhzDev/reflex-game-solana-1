@@ -1,14 +1,16 @@
 import { Connection, PublicKey, SystemProgram, LAMPORTS_PER_SOL, Transaction } from '@solana/web3.js';
-import { Program, AnchorProvider, BN, Idl } from '@coral-xyz/anchor';
+import { Program, AnchorProvider, Idl } from '@coral-xyz/anchor';
 import { WalletContextState } from '@solana/wallet-adapter-react';
 import { GAME_CONFIG } from '../config/constants';
-import { ProgramError, StakingProgram } from '../types/program';
+import { ProgramError } from '../types/program';
 import { toast } from 'react-hot-toast';
+import * as anchor from "@coral-xyz/anchor";
+const { BN } = anchor;
 
 export class SolanaService {
   private connection: Connection;
   private wallet: WalletContextState;
-  private program: StakingProgram;
+  private program: Program;
 
   constructor(connection: Connection, wallet: WalletContextState) {
     this.connection = connection;
@@ -23,10 +25,10 @@ export class SolanaService {
     this.program = new Program(
       GAME_CONFIG.IDL,
       provider
-    ) as StakingProgram;
+    );
   }
 
-  async stake(amount: number): Promise<void> {
+  async stake(amount: number): Promise<string> {
     if (!this.wallet.publicKey) throw new Error('Wallet not connected');
 
     try {
@@ -70,16 +72,13 @@ export class SolanaService {
 
       const signature = await this.connection.sendRawTransaction(signedTx.serialize());
       
-      const confirmation = await this.connection.confirmTransaction({
+      await this.connection.confirmTransaction({
         signature,
         blockhash: latestBlockhash.blockhash,
         lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
-      }, 'confirmed');
+      });
 
-      if (confirmation.value.err) {
-        throw new Error('Transaction failed');
-      }
-
+      return signature;
     } catch (error) {
       console.error('Stake error:', error);
       throw this.handleError(error);
@@ -94,17 +93,15 @@ export class SolanaService {
       return new Error(programError.msg);
     }
     
-    // Handle specific error codes
-    if (programError.code === 6000) {
-      return new Error('Program is already initialized');
+    switch (programError.code) {
+      case 6000:
+        return new Error('Program is already initialized');
+      case 6001:
+        return new Error('Unauthorized action');
+      case 6003:
+        return new Error('Insufficient stake amount');
+      default:
+        return new Error('Transaction failed. Please try again.');
     }
-    if (programError.code === 6001) {
-      return new Error('Unauthorized action');
-    }
-    if (programError.code === 6003) {
-      return new Error('Insufficient stake amount');
-    }
-    
-    return new Error('Transaction failed. Please try again.');
   }
 }
