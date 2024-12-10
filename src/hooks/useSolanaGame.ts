@@ -14,10 +14,15 @@ export const useSolanaGame = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (connection && wallet) {
-      setSolanaService(new SolanaService(connection, wallet));
+    if (connection && wallet.connected) {
+      try {
+        setSolanaService(new SolanaService(connection, wallet));
+      } catch (error) {
+        console.error('Failed to initialize Solana service:', error);
+        toast.error('Failed to connect to Solana network');
+      }
     }
-  }, [connection, wallet]);
+  }, [connection, wallet, wallet.connected]);
 
   const handleStake = useCallback(async (): Promise<void> => {
     if (!solanaService || !wallet.publicKey) {

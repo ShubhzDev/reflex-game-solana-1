@@ -1,11 +1,11 @@
 import { Connection, PublicKey, Transaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { Program, AnchorProvider, Idl } from '@coral-xyz/anchor';
+import { Program, AnchorProvider } from '@coral-xyz/anchor';
 import { WalletContextState } from '@solana/wallet-adapter-react';
 import { GAME_CONFIG } from '../config/constants';
+import { createAnchorProvider, createProgram } from '../config/anchor';
 import { StakeTransaction } from './transactions/StakeTransaction';
 import { SolanaTransactionError, SolanaConnectionError, SolanaConfigError } from './errors/SolanaErrors';
 import * as anchor from "@coral-xyz/anchor";
-const { BN } = anchor;
 
 export class SolanaService {
   private connection: Connection;
@@ -20,17 +20,8 @@ export class SolanaService {
     this.connection = connection;
     this.wallet = wallet;
     
-    const provider = new AnchorProvider(
-      connection,
-      wallet as any,
-      { commitment: 'processed' }
-    );
-
-    this.program = new Program(
-      GAME_CONFIG.IDL,
-      provider
-    );
-
+    const provider = createAnchorProvider(connection, wallet as any);
+    this.program = createProgram(provider);
     this.stakeTransaction = new StakeTransaction(this.program);
   }
 
@@ -40,12 +31,20 @@ export class SolanaService {
     }
 
     try {
-      const lamports = new BN(amount * LAMPORTS_PER_SOL);
+      // Check wallet balance
+      const balance = await this.connection.getBalance(this.wallet.publicKey);
+      const requiredAmount = GAME_CONFIG.MIN_STAKE_TOTAL;
       
-      // Build the transaction
+      if (balance < requiredAmount) {
+        throw new SolanaTransactionError(
+          `Insufficient balance. Need ${requiredAmount / LAMPORTS_PER_SOL} SOL (includes rent)`
+        );
+      }
+
+      // Build the transaction with stake amount + rent
       const tx = await this.stakeTransaction.build(
         this.wallet.publicKey,
-        lamports
+        new anchor.BN(requiredAmount)
       );
 
       // Get latest blockhash
@@ -53,10 +52,8 @@ export class SolanaService {
       tx.recentBlockhash = latestBlockhash.blockhash;
       tx.feePayer = this.wallet.publicKey;
 
-      // Sign transaction
+      // Sign and send transaction
       const signedTx = await this.signTransaction(tx);
-
-      // Send and confirm transaction
       const signature = await this.sendAndConfirmTransaction(signedTx, latestBlockhash);
 
       return signature;
@@ -102,7 +99,6 @@ export class SolanaService {
       return error;
     }
 
-    // Handle SendTransactionError specifically
     if ((error as any).logs) {
       return SolanaTransactionError.fromSendTransactionError(error as any);
     }

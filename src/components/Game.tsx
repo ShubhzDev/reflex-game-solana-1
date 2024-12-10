@@ -10,6 +10,8 @@ import { Twitter } from 'lucide-react';
 import { useGameState } from '../hooks/useGameState';
 import { useSolanaGame } from '../hooks/useSolanaGame';
 import { toast } from 'react-hot-toast';
+import { GAME_CONFIG } from '../config/constants';
+import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 
 const Game: React.FC = () => {
   const { publicKey } = useWallet();
@@ -40,6 +42,10 @@ const Game: React.FC = () => {
     }
   };
 
+  const stakeAmount = GAME_CONFIG.STAKE_AMOUNT / LAMPORTS_PER_SOL;
+  const rentAmount = GAME_CONFIG.RENT_AMOUNT / LAMPORTS_PER_SOL;
+  const totalRequired = GAME_CONFIG.MIN_STAKE_TOTAL / LAMPORTS_PER_SOL;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 text-white p-4">
       <LegalDisclaimer />
@@ -55,8 +61,9 @@ const Game: React.FC = () => {
                 onClick={onStakeClick}
                 disabled={isLoading}
                 className="px-6 py-3 bg-gradient-to-r from-cyan-400 to-pink-400 rounded-lg font-bold text-white hover:opacity-90 transition-all duration-300 shadow-xl disabled:opacity-50"
+                title={`Stake ${stakeAmount} SOL + ${rentAmount} SOL rent`}
               >
-                {isLoading ? 'Staking...' : 'Stake 0.1 SOL to Play'}
+                {isLoading ? 'Staking...' : `Stake ${totalRequired} SOL to Play`}
               </button>
             )}
             <WalletMultiButton />
