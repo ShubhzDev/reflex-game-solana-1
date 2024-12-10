@@ -35,7 +35,7 @@ pub mod staking_program {
         if player_account.key == Pubkey::default() {
             // If this is a new player, ensure they're paying enough to cover rent
             require!(
-                amount >= required_lamports,
+                amount >= required_lamports * 2,
                 CustomError::InsufficientStakeForRent
             );
 
